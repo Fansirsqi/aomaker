@@ -35,9 +35,12 @@ class FeishuSend:
 
     def __init__(self, tester="古一", title="自动化测试通知", report_address=""):
         conf = load_yaml(utils_yaml_path) or {}
-        self.feishu_conf = conf.get('feishu') or {}
-        self.curl = (self.feishu_conf.get('webhook') or '').strip()
-        self.secret = (self.feishu_conf.get('secret') or '').strip()
+        feishu_conf = conf.get('feishu') or {}
+        if not isinstance(feishu_conf, dict):
+            raise ValueError("conf/utils.yaml 的 feishu 段应为字典，实际是 {}".format(type(feishu_conf).__name__))
+        self.feishu_conf = feishu_conf
+        self.curl = str(feishu_conf.get('webhook') or '').strip()
+        self.secret = str(feishu_conf.get('secret') or '').strip()
         if not self.curl:
             raise ValueError("conf/utils.yaml 缺少 feishu.webhook，无法发送飞书通知")
 
@@ -50,8 +53,12 @@ class FeishuSend:
         self.broken = str(self.test_results.broken_count)
         self.passed_rate = self.test_results.passed_rate
         self.duration = self.test_results.duration
+        # 只用来读一次环境名，读掉就关连接（与 wechat.py 用完即关的口径一致，但更早释放）
         self.config_db = Config()
-        self.current_env = self.config_db.get('current_env')
+        try:
+            self.current_env = self.config_db.get('current_env')
+        finally:
+            self.config_db.close()
         self.tester = tester
         self.title = title
         self.report_address = report_address
@@ -113,7 +120,8 @@ class FeishuSend:
     def send_msg(self):
         """发送飞书通知，返回飞书响应。
 
-        飞书成功返回 {"code":0,...} 或 {"StatusCode":0,...}，非 0 视为失败。
+        只有业务码明确为 0 才算成功：飞书成功返回 {"code":0,...} 或 {"StatusCode":0,...}。
+        缺字段、null 或非 0 都抛异常 —— 否则 HTTP 200 + 空报文会被误判成发送成功。
         """
         json_data = {"msg_type": "interactive", "card": self._build_card()}
         if self.secret:
@@ -122,10 +130,21 @@ class FeishuSend:
             json_data['sign'] = self._sign(timestamp)
 
         res = requests.post(url=self.curl, json=json_data, headers=self.headers, timeout=10)
-        res.raise_for_status()
-        result = res.json()
-        code = result.get('code', result.get('StatusCode'))
-        if code not in (0, None):
+        if not 200 <= res.status_code < 300:
+            # 不回显 webhook（含 token），只给状态与响应摘要
+            raise ValueError("飞书通知 HTTP 异常：{}，响应摘要：{}".format(res.status_code, res.text[:200]))
+
+        try:
+            result = res.json()
+        except ValueError as exc:
+            raise ValueError("飞书通知响应不是合法 JSON：{}".format(res.text[:200])) from exc
+        if not isinstance(result, dict):
+            raise ValueError("飞书通知响应应为 JSON 对象，实际是 {}：{}".format(type(result).__name__, result))
+
+        code = result.get('code')
+        if code is None:
+            code = result.get('StatusCode')
+        if code != 0:
             raise ValueError("飞书「interactive 卡片」消息发送失败：{}".format(result))
         return result
 
