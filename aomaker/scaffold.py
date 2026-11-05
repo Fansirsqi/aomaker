@@ -840,8 +840,24 @@ release:
     create_file(Path(project_name) / "conf" / "aomaker.yaml", aomaker_content)
     create_file(Path(project_name) / "conf" / "dist_strategy.yaml")
 
-    utils_config_content = """wechat: 
+    utils_config_content = """# 测试结果通知配置：填哪个平台就发哪个，不用的留空即可
+wechat:
+    # 企业微信群机器人（原有能力）
     webhook:
+feishu:
+    # 飞书群机器人；secret 仅在机器人开启「加签」时填写，关键词模式留空
+    webhook:
+    secret:
+dingtalk:
+    # 钉钉群机器人；secret 仅在机器人开启「加签」时填写
+    webhook:
+    secret:
+generic:
+    # 通用 webhook：把测试结果摘要按 JSON POST 到任意平台
+    webhook:
+    method: POST
+    headers:
+    payload_template:
     """
     create_file(Path(project_name) / "conf" / "utils.yaml", utils_config_content)
     conftest_content = """"""

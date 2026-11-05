@@ -691,6 +691,46 @@ class GetContainersAPI(GatewayAPI[ContainersResp]):
 
 还有更多的特性在此就不再赘述，感兴趣可以前往官方文档进行了解：**https://aomaker.cn**
 
+# 📣 测试结果通知（多平台）
+
+运行结束后把结果推到群里。配置写在 `conf/utils.yaml`，**填哪个平台就发哪个**，不用的留空即可：
+
+```yaml
+wechat:                    # 企业微信（原有能力）
+    webhook:
+feishu:                    # 飞书群机器人
+    webhook:
+    secret:                # 机器人开启「加签」才填，关键词模式留空
+dingtalk:                  # 钉钉群机器人
+    webhook:
+    secret:
+generic:                   # 通用 webhook：把摘要 JSON POST 到任意平台
+    webhook:
+    method: POST
+    headers:
+    payload_template:
+```
+
+用法（以在 `hooks.py` 里挂会话结束钩子为例）：
+
+```python
+from aomaker.send_msg import DingTalkSend, FeishuSend, GenericSend, WeChatSend
+
+FeishuSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
+DingTalkSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
+GenericSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
+WeChatSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
+```
+
+各平台差异：
+
+| 平台 | 消息形态 | 加签 |
+|---|---|---|
+| 飞书 `FeishuSend` | interactive 卡片，主题色随结果变（失败/阻塞红、有跳过橙、全绿绿） | 支持 |
+| 钉钉 `DingTalkSend` | markdown | 支持 |
+| 通用 `GenericSend` | JSON POST，字段含 title/environment/passed_rate/total/passed/failed/broken/skipped/duration/report_url | 自定义 headers |
+| 企业微信 `WeChatSend` | markdown | —— |
+
 # 🤝 如何贡献
 
 我们热烈欢迎社区的贡献！无论是报告 Bug、提出功能建议还是提交代码，都对 `aomaker` 的发展至关重要。
