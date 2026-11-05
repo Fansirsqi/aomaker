@@ -29,8 +29,11 @@ class GenericSend:
 
     def __init__(self, tester="古一", title="自动化测试通知", report_address=""):
         conf = load_yaml(utils_yaml_path) or {}
-        self.generic_conf = conf.get('generic') or {}
-        self.webhook = (self.generic_conf.get('webhook') or '').strip()
+        generic_conf = conf.get('generic') or {}
+        if not isinstance(generic_conf, dict):
+            raise ValueError("conf/utils.yaml 的 generic 段应为字典，实际是 {}".format(type(generic_conf).__name__))
+        self.generic_conf = generic_conf
+        self.webhook = str(generic_conf.get('webhook') or '').strip()
         if not self.webhook:
             raise ValueError("conf/utils.yaml 缺少 generic.webhook，无法发送通用 webhook 通知")
         self.method = (self.generic_conf.get('method') or 'POST').upper()
@@ -38,8 +41,12 @@ class GenericSend:
         self.payload_template = self.generic_conf.get('payload_template') or {}
 
         self.test_results = CaseSummary()
+        # 只用来读一次环境名，读掉就关连接（与 wechat.py 用完即关的口径一致，但更早释放）
         self.config_db = Config()
-        self.current_env = self.config_db.get('current_env')
+        try:
+            self.current_env = self.config_db.get('current_env')
+        finally:
+            self.config_db.close()
         self.tester = tester
         self.title = title
         self.report_address = report_address
