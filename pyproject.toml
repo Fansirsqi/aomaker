@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aomaker"
+# 上游仓库没有打包元数据，PyPI 上的 3.0.3 由别处构建。本 fork 自建配置，
+# 用 +sikuodi.N 作为本地版本后缀，便于区分"我们的构建"和官方发布。
+version = "3.0.3+sikuodi.1"
+description = "An api testing framework"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{ name = "ancientone", email = "listeningsss@163.com" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+]
+# 依赖取自官方 3.0.3 发行包的 Requires-Dist（唯一可信来源），与 requirements.txt 的
+# 开发期固定版本不同，后者用于本地环境复现。
+dependencies = [
+    "black==23.11.0",
+    "Jinja2==3.1.5",
+    "jsonpath==0.82",
+    "loguru==0.6.0",
+    "PyMySQL",
+    "pytest==7.2.0",
+    "PyYAML==6.0.2",
+    "requests==2.28.1",
+    "allure-pytest==2.8.24",
+    "pydantic==2.10.5",
+    "colorlog==6.7.0",
+    "jsonschema==4.17.3",
+    "genson==1.2.2",
+    "click==8.1.3",
+    "emoji==2.2.0",
+    "click-help-colors==0.9.1",
+    "tenacity==8.2.3",
+    "ruamel.yaml==0.17.21",
+    "jsonschema-extractor==2.0.2",
+    "rich==12.6.0",
+    "attrs==25.1.0",
+    "cattrs==24.1.2",
+    "fastapi==0.110.0",
+    "uvicorn==0.28.0",
+    "wsproto==1.2.0",
+    "inflection==0.5.1",
+    "PyJWT==2.10.1",
+    "python-multipart==0.0.20",
+    "apischema==0.19.0",
+    "deepdiff==8.6.0",
+]
+
+[project.urls]
+Homepage = "https://aomaker.cn"
+Repository = "https://github.com/ae86sen/aomaker"
+
+[project.scripts]
+aomaker = "aomaker.cli:main"
+arun = "aomaker.cli:main_arun_alias"
+
+[tool.setuptools.packages.find]
+include = ["aomaker*"]
+
+[tool.setuptools.package-data]
+aomaker = ["html/*.html"]
+"aomaker.maker" = ["templates/*.j2"]
