@@ -12,19 +12,27 @@ from aomaker._constants import Conf
 
 utils_yaml_path = os.path.join(CONF_DIR, Conf.UTILS_CONF_NAME)
 
+# 只允许能把 JSON 放在请求体里的方法。GET/HEAD 之类会把摘要丢掉且不报错，
+# 与其静默失败，不如在配置阶段就拒绝。
+_ALLOWED_METHODS = ('POST', 'PUT', 'PATCH')
+
 
 class GenericSend:
     """
-    通用 webhook 通知：把测试结果摘要按 JSON POST 到任意平台。
+    通用 webhook 通知：把测试结果摘要按 JSON 请求体发到任意平台。
 
     适合对接自建服务、Slack/Teams 中转、或尚未内置适配的平台。
+    注意：这里产出的是「摘要字段」协议（见 build_payload），
+    面向的是能直接消费该结构的服务；若目标平台要求 text/blocks/卡片等专有结构，
+    请用 payload_template 覆盖，或自己写一个适配器，而不是指望默认字段直接兼容。
+
     配置在 conf/utils.yaml 的 generic 段：
         generic:
             webhook: https://your-endpoint/hook
-            method: POST                 # 可选，默认 POST
-            headers:                     # 可选，会与默认的 Content-Type 合并
+            method: POST                 # 可选，默认 POST，仅支持 POST/PUT/PATCH
+            headers:                     # 可选，必须为字典；值为 None 的键会被跳过
                 Authorization: Bearer xxx
-            payload_template: {}         # 可选，与默认摘要字段做浅合并（同名以模板为准）
+            payload_template: {}         # 可选，必须为字典；与默认摘要做浅合并（同名覆盖）
     """
 
     def __init__(self, tester="古一", title="自动化测试通知", report_address=""):
@@ -33,12 +41,22 @@ class GenericSend:
         if not isinstance(generic_conf, dict):
             raise ValueError("conf/utils.yaml 的 generic 段应为字典，实际是 {}".format(type(generic_conf).__name__))
         self.generic_conf = generic_conf
+
         self.webhook = str(generic_conf.get('webhook') or '').strip()
         if not self.webhook:
             raise ValueError("conf/utils.yaml 缺少 generic.webhook，无法发送通用 webhook 通知")
-        self.method = (self.generic_conf.get('method') or 'POST').upper()
-        self.extra_headers = self.generic_conf.get('headers') or {}
-        self.payload_template = self.generic_conf.get('payload_template') or {}
+
+        method = generic_conf.get('method') or 'POST'
+        if not isinstance(method, str):
+            raise ValueError("conf/utils.yaml 的 generic.method 应为字符串，实际是 {}".format(type(method).__name__))
+        self.method = method.strip().upper()
+        if self.method not in _ALLOWED_METHODS:
+            raise ValueError(
+                "conf/utils.yaml 的 generic.method 只支持 {}，实际配置为 {}".format(
+                    '/'.join(_ALLOWED_METHODS), self.method))
+
+        self.extra_headers = self._dict_or_raise(generic_conf.get('headers'), 'generic.headers')
+        self.payload_template = self._dict_or_raise(generic_conf.get('payload_template'), 'generic.payload_template')
 
         self.test_results = CaseSummary()
         # 只用来读一次环境名，读掉就关连接（与 wechat.py 用完即关的口径一致，但更早释放）
@@ -50,6 +68,19 @@ class GenericSend:
         self.tester = tester
         self.title = title
         self.report_address = report_address
+
+    @staticmethod
+    def _dict_or_raise(value, key):
+        """只接受 None 或字典；None 归一化为空字典，其它类型直接报错。
+
+        写成字符串/列表时若静默忽略，会表现为「发送成功但平台没收到所需字段」，
+        比直接报错难排查得多。
+        """
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("conf/utils.yaml 的 {} 应为字典或留空，实际是 {}".format(key, type(value).__name__))
+        return value
 
     def build_payload(self):
         """组装标准摘要 payload；模板里的同名字段会覆盖默认值。"""
@@ -67,15 +98,14 @@ class GenericSend:
             "report_address": self.report_address,
             "report_url": self.report_address,
         }
-        if isinstance(self.payload_template, dict):
-            payload.update(self.payload_template)
+        payload.update(self.payload_template)
         return payload
 
     def send_msg(self):
-        """发送通用 webhook，返回解析后的响应（非 JSON 响应返回原始文本）。"""
+        """发送通用 webhook，返回解析后的响应（响应不是 JSON 时返回原始文本）。"""
         headers = {"Content-Type": "application/json"}
-        if isinstance(self.extra_headers, dict):
-            headers.update({str(k): str(v) for k, v in self.extra_headers.items()})
+        # 值为 None 的 header 直接跳过，避免变成字面量字符串 "None"
+        headers.update({str(k): str(v) for k, v in self.extra_headers.items() if v is not None})
 
         payload = self.build_payload()
         res = requests.request(
@@ -86,10 +116,11 @@ class GenericSend:
             timeout=10,
         )
         if not 200 <= res.status_code < 300:
-            raise ValueError("通用 webhook 发送失败：HTTP {} {}".format(res.status_code, res.text[:200]))
+            raise ValueError("通用 webhook 发送失败：HTTP {}，响应摘要：{}".format(res.status_code, res.text[:200]))
         try:
             return res.json()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, requests.exceptions.JSONDecodeError):
+            # 用 requests 的异常类型兜底：安装了 simplejson 时解码异常不一定是标准库那个
             return res.text
 
 

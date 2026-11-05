@@ -840,7 +840,8 @@ release:
     create_file(Path(project_name) / "conf" / "aomaker.yaml", aomaker_content)
     create_file(Path(project_name) / "conf" / "dist_strategy.yaml")
 
-    utils_config_content = """# 测试结果通知配置：填哪个平台就发哪个，不用的留空即可
+    utils_config_content = """# 测试结果通知配置：按需填写；用哪个平台就在 hooks.py 的后置钩子里调用哪个发送器
+# （发送器不会自动分发，未配置的平台不要调用）
 wechat:
     # 企业微信群机器人（原有能力）
     webhook:

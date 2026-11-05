@@ -693,7 +693,7 @@ class GetContainersAPI(GatewayAPI[ContainersResp]):
 
 # 📣 测试结果通知（多平台）
 
-运行结束后把结果推到群里。配置写在 `conf/utils.yaml`，**填哪个平台就发哪个**，不用的留空即可：
+运行结束后把结果推到群里。配置写在 `conf/utils.yaml`，**配了哪个就调用哪个，发送器不会自动分发**；不用的平台留空且不要在钩子里调用它。
 
 ```yaml
 wechat:                    # 企业微信（原有能力）
@@ -711,16 +711,32 @@ generic:                   # 通用 webhook：把摘要 JSON POST 到任意平�
     payload_template:
 ```
 
-用法（以在 `hooks.py` 里挂会话结束钩子为例）：
+### 必须注册成「后置钩子」，且必须是生成器
+
+通知要在**报告生成之后**发。aomaker 的 `teardown` 顺序是「先 `gen_reports()`，再
+`session_hook.execute_post_hooks()`」，而 `session_hook` 只把**生成器函数**当作后置钩子
+（`execute_post_hooks` 执行的是生成器的第二次 `next`）。写成普通函数会被当成前置钩子，
+在用例开始前就执行 —— 那时报告还没生成，`CaseSummary` 会读到旧数据甚至直接报错。
 
 ```python
-from aomaker.send_msg import DingTalkSend, FeishuSend, GenericSend, WeChatSend
+# hooks.py
+from aomaker.hook_manager import session_hook
 
-FeishuSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
-DingTalkSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
-GenericSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
-WeChatSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
+
+@session_hook.register
+def notify_after_run():
+    """生成器：yield 之前是前置（这里什么都不做），yield 之后在报告生成完才执行。"""
+    yield
+    from aomaker.send_msg import FeishuSend
+
+    try:
+        FeishuSend(title="商城接口自动化", report_address="http://your-report-url").send_msg()
+    except Exception as exc:      # 通知失败不应该影响回归结论
+        print("[notify] 飞书通知失败：{}".format(exc))
 ```
+
+只需要通知一个平台就只调一个；要通知多个平台，在同一个后置钩子里依次调用对应的发送器即可
+（**没有配置的平台不要调用**，否则会因缺少 webhook 直接抛 `ValueError`）。
 
 各平台差异：
 
