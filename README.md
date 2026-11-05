@@ -747,6 +747,39 @@ def notify_after_run():
 | 通用 `GenericSend` | JSON POST，字段含 title/environment/passed_rate/total/passed/failed/broken/skipped/duration/report_url | 自定义 headers |
 | 企业微信 `WeChatSend` | markdown | —— |
 
+# 🔧 本 fork 的维护说明
+
+本仓库是 [ae86sen/aomaker](https://github.com/ae86sen/aomaker) 的 fork，用于自行维护并补充
+多平台通知能力（见上一节）。与上游的差异只在 `aomaker/send_msg/`、`scaffold.py` 的配置模板、
+`pyproject.toml`、`.gitignore` 与本文档。
+
+## 安装
+
+```bash
+# 仓库推送后（推荐）：直接按分支装
+pip install "git+ssh://git@github.com/<你的账号>/aomaker.git@feat/notify-multi-platform"
+
+# 或者本地构建后安装
+uv build --wheel --out-dir dist
+pip install dist/aomaker-*.whl
+```
+
+版本号带 `+sikuodi.N` 本地后缀，用来和官方发行版区分（`pip show aomaker` 能一眼看出装的是哪份）。
+
+## 同步上游
+
+```bash
+git remote add upstream https://github.com/ae86sen/aomaker.git   # 只需一次
+git fetch upstream
+git rebase upstream/master        # 我们的改动集中在 send_msg/ 与配置模板，冲突面很小
+```
+
+## 关于 pyproject.toml
+
+上游所有分支都没有打包元数据（无 `setup.py`/`pyproject.toml`），PyPI 上的发行包由仓库外的
+配置构建。本 fork 按官方 3.0.3 的 `Requires-Dist` 补齐了 `pyproject.toml`，否则 fork 只能靠
+`PYTHONPATH` 跑源码、无法安装到其他机器。依赖以发行包元数据为准，`requirements.txt` 是开发期固定版本。
+
 # 🤝 如何贡献
 
 我们热烈欢迎社区的贡献！无论是报告 Bug、提出功能建议还是提交代码，都对 `aomaker` 的发展至关重要。
