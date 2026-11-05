@@ -1,0 +1,24 @@
+# Python 编译产物
+__pycache__/
+*.py[cod]
+*.so
+
+# 打包与构建产物
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# 虚拟环境与测试缓存
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 运行期产物（aomaker 在项目目录里生成）
+database/
+*.db
+logs/
+reports/
+.allure-results/
